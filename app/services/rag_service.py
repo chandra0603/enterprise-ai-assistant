@@ -2,44 +2,54 @@ from app.services.document_service import DocumentService
 from app.prompt.prompt_builder import PromptBuilder
 from app.llm.gemini import GeminiLLM
 from app.database.conversation_repository import ConversationRepository
+from app.rag.reranker import ReRanker
 
 
 class RAGService:
 
     def __init__(self):
+
         self.document_service = DocumentService()
+        self.prompt_builder = PromptBuilder()
         self.llm = GeminiLLM()
-        self.memory = ConversationRepository()
+        self.repository = ConversationRepository()
+        self.reranker = ReRanker()
 
     def ask(self, session_id: str, question: str):
 
-        # Get previous conversation
-        history = self.memory.get_history(session_id)
+        # Get conversation history
+        history = self.repository.get_history(session_id)
 
-        # Retrieve relevant documents
+        # Retrieve documents
         retrieved_docs = self.document_service.search(question)
 
+        # Re-rank documents
+        retrieved_docs = self.reranker.rerank(
+            question,
+            retrieved_docs
+        )
+
         # Build prompt
-        prompt = PromptBuilder.build(
-            question=question,
-            documents=retrieved_docs,
-            history=history
+        prompt = self.prompt_builder.build(
+            question,
+            retrieved_docs,
+            history
         )
 
         # Generate answer
         answer = self.llm.generate(prompt)
 
         # Save conversation
-        self.memory.add_message(
-            session_id=session_id,
-            role="user",
-            content=question
+        self.repository.add_message(
+            session_id,
+            "user",
+            question
         )
 
-        self.memory.add_message(
-            session_id=session_id,
-            role="assistant",
-            content=answer
+        self.repository.add_message(
+            session_id,
+            "assistant",
+            answer
         )
 
         # Return response
@@ -48,45 +58,51 @@ class RAGService:
             "sources": [
                 {
                     "page": doc.metadata.get("page"),
-                    "score": float(score),
-                    "content": doc.page_content
+                    "score": float(score)
                 }
                 for doc, score in retrieved_docs
             ]
         }
-        
-    
+
     def stream(self, session_id: str, question: str):
 
-        # Get previous conversation
-        history = self.memory.get_history(session_id)
+        # Get conversation history
+        history = self.repository.get_history(session_id)
 
-        # Retrieve relevant documents
+        # Retrieve documents
         retrieved_docs = self.document_service.search(question)
 
-        # Build prompt
-        prompt = PromptBuilder.build(
-            question=question,
-            documents=retrieved_docs,
-            history=history
+        # Re-rank documents
+        retrieved_docs = self.reranker.rerank(
+            question,
+            retrieved_docs
         )
 
-        # Collect streamed response
-        answer = ""
+        # Build prompt
+        prompt = self.prompt_builder.build(
+            question,
+            retrieved_docs,
+            history
+        )
 
+        full_answer = ""
+
+        # Stream response
         for chunk in self.llm.stream(prompt):
-            answer += chunk
+
+            full_answer += chunk
+
             yield chunk
 
-        # Save conversation after streaming completes
-        self.memory.add_message(
-            session_id=session_id,
-            role="user",
-            content=question
+        # Save conversation
+        self.repository.add_message(
+            session_id,
+            "user",
+            question
         )
 
-        self.memory.add_message(
-            session_id=session_id,
-            role="assistant",
-            content=answer
+        self.repository.add_message(
+            session_id,
+            "assistant",
+            full_answer
         )
