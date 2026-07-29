@@ -1,45 +1,56 @@
-from pathlib import Path
-
 from app.rag.loader import PDFLoader
 from app.rag.chunker import DocumentChunker
+from app.rag.embeddings import EmbeddingModel
 from app.rag.vector_store import VectorStore
 from app.rag.retriever import Retriever
+from app.rag.keyword_search import KeywordSearch
+from app.rag.hybrid_retriever import HybridRetriever
 
 
 class DocumentService:
 
     def __init__(self):
+
         self.loader = PDFLoader()
         self.chunker = DocumentChunker()
+        self.embedding = EmbeddingModel()
         self.vector_store = VectorStore()
         self.retriever = Retriever()
-        
-    def load_document(self, filename: str):
+        self.keyword_search = KeywordSearch()
+        self.hybrid_retriever = HybridRetriever()
 
-        if not filename.endswith(".pdf"):
-            filename += ".pdf"
+        self.documents = []
 
-        path = Path("data/documents") / filename
+    def upload(self, file_path: str):
 
-        return self.loader.load(str(path))
+        # Load PDF
+        documents = self.loader.load(file_path)
 
-    def chunk_document(self, filename: str):
-
-        documents = self.load_document(filename)
-
+        # Split into chunks
         chunks = self.chunker.split(documents)
 
-        return chunks
-    
-    def create_embeddings(self, filename: str):
-
-        chunks = self.chunk_document(filename)
-
+        # Create FAISS index
         self.vector_store.create(chunks)
 
-        return len(chunks)
-    
+        # Keep chunks in memory for keyword search
+        self.documents.extend(chunks)
+
+        return {
+            "message": "Document uploaded successfully",
+            "chunks": len(chunks)
+        }
+
     def search(self, question: str, k=None):
 
-        return self.retriever.search(question, k)
-    
+        semantic_results = self.retriever.search(question, k)
+
+        keyword_results = self.keyword_search.search(
+            question,
+            self.documents
+        )
+
+        return self.hybrid_retriever.merge(
+            semantic_results,
+            keyword_results,
+            top_k=k if k else 3
+        )
