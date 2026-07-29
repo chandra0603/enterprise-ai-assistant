@@ -54,3 +54,18 @@ def list_documents():
     return {
         "documents": files
     }
+    
+@router.delete("/{filename}")
+def delete_document(filename: str):
+
+    return service.delete(filename)
+
+@router.put("/update")
+async def update_document(file: UploadFile = File(...)):
+
+    file_path = UPLOAD_DIR / file.filename
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return service.update(str(file_path))

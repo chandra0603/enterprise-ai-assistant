@@ -9,6 +9,8 @@ class MetadataStore:
 
         self.folder = "metadata"
 
+        self.hash_file = "metadata/file_hashes.json"
+        
         os.makedirs(self.folder, exist_ok=True)
 
         self.parent_file = os.path.join(
@@ -21,7 +23,7 @@ class MetadataStore:
             "children.json"
         )
 
-    def save(self, parents, children):
+    def save(self,parents,children,file_hashes):
 
         print("=" * 60)
         print("MetadataStore.save() called")
@@ -78,6 +80,8 @@ class MetadataStore:
 
         print("Metadata saved successfully.")
         print("=" * 60)
+        with open(self.hash_file, "w") as file:
+            json.dump(file_hashes, file, indent=4)
 
     def load(self):
 
@@ -130,4 +134,11 @@ class MetadataStore:
         print(f"Loaded Children: {len(children)}")
         print("=" * 60)
 
-        return parents, children
+        file_hashes = {}
+
+        if os.path.exists(self.hash_file):
+
+            with open(self.hash_file, "r") as file:
+                file_hashes = json.load(file)
+
+        return parents, children, file_hashes

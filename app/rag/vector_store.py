@@ -17,12 +17,31 @@ class VectorStore:
 
     def create(self, documents):
 
-        self.db = FAISS.from_documents(
-            documents,
-            self.embeddings
-        )
+        if os.path.exists(self.index_path):
+
+            print("Existing FAISS found.")
+
+            self.load()
+
+            if self.db is None:
+                raise RuntimeError("Failed to load existing FAISS index.")
+
+            print(f"Adding {len(documents)} new chunks...")
+
+            self.db.add_documents(documents)
+
+        else:
+
+            print("Creating new FAISS index...")
+
+            self.db = FAISS.from_documents(
+                documents,
+                self.embeddings
+            )
 
         self.db.save_local(self.index_path)
+
+        print("FAISS saved successfully.")
 
     def load(self):
 
@@ -43,3 +62,16 @@ class VectorStore:
             self.load()
 
         return self.db
+    
+    def rebuild(self, documents):
+
+        print("Rebuilding FAISS index...")
+
+        self.db = FAISS.from_documents(
+            documents,
+            self.embeddings
+        )
+
+        self.db.save_local(self.index_path)
+
+        print("FAISS rebuilt successfully.")

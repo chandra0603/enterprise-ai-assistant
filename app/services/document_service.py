@@ -7,6 +7,7 @@ from app.rag.keyword_search import KeywordSearch
 from app.rag.hybrid_retriever import HybridRetriever
 from app.rag.query_expander import QueryExpander
 from app.storage.metadata_store import MetadataStore
+from app.utils.file_hash import FileHash
 
 
 class DocumentService:
@@ -29,10 +30,24 @@ class DocumentService:
         self.metadata_store = MetadataStore()
 
         # Load saved metadata if available
-        self.parent_documents, self.documents = self.metadata_store.load()
+        (
+            self.parent_documents,
+            self.documents,
+            self.file_hashes
+        ) = self.metadata_store.load()
         self.vector_store.load()
 
     def upload(self, file_path: str):
+        
+        file_hash = FileHash.generate(file_path)
+
+        if file_hash in self.file_hashes:
+
+            return {
+                "message": "Document already exists.",
+                "parent_chunks": 0,
+                "child_chunks": 0
+            }
 
         print("=" * 60)
         print("STEP 1 - upload() started")
@@ -73,9 +88,15 @@ class DocumentService:
         self.documents = children
 
         print("STEP 7 - Saving metadata")
+        
+        self.file_hashes[file_hash] = {
+            "file_name": os.path.basename(file_path)
+        }
+        
         self.metadata_store.save(
             self.parent_documents,
-            self.documents
+            self.documents,
+            self.file_hashes
         )
 
         print("STEP 8 - Metadata saved")
@@ -139,3 +160,67 @@ class DocumentService:
                     added.add(parent_id)
 
         return parent_results
+    
+    
+    def delete(self, file_name: str):
+
+        parent_ids = []
+
+        # Find parent IDs belonging to this file
+        for parent_id, parent in list(self.parent_documents.items()):
+
+            if parent.metadata.get("source", "").endswith(file_name):
+
+                parent_ids.append(parent_id)
+
+        if not parent_ids:
+
+            return {
+                "message": "Document not found."
+            }
+
+        # Remove parents
+        for parent_id in parent_ids:
+            del self.parent_documents[parent_id]
+
+        # Remove child chunks
+        self.documents = [
+            doc
+            for doc in self.documents
+            if doc.metadata["parent_id"] not in parent_ids
+        ]
+
+        # Remove hash
+        for file_hash, value in list(self.file_hashes.items()):
+
+            if value["file_name"] == file_name:
+                del self.file_hashes[file_hash]
+
+        # Rebuild FAISS
+        self.vector_store.rebuild(self.documents)
+
+        # Save metadata
+        self.metadata_store.save(
+            self.parent_documents,
+            self.documents,
+            self.file_hashes
+        )
+
+        return {
+            "message": "Document deleted successfully."
+        }
+        
+    
+    def update(self, file_path: str):
+
+        import os
+
+        file_name = os.path.basename(file_path)
+
+        print(f"Updating document: {file_name}")
+
+        # Delete old version if it exists
+        self.delete(file_name)
+
+        # Upload new version
+        return self.upload(file_path)
