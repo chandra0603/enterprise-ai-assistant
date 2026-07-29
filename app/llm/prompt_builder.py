@@ -1,8 +1,13 @@
 class PromptBuilder:
 
     @staticmethod
-    def build(question, documents):
+    def build(question, documents, history):
 
+        history_text = "\n".join(
+        f"{msg['role']}: {msg['content']}"
+        for msg in history
+        )
+        
         context = "\n\n".join(
             doc.page_content
             for doc, score in documents

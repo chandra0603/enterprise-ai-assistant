@@ -9,26 +9,31 @@ router = APIRouter(
     tags=["Chat"]
 )
 
-service = DocumentService()
-service = RAGService()
+document_service = DocumentService()
+rag_service = RAGService()
 
 
 @router.post("/search")
 def search(request: SearchRequest):
 
-    docs = service.search(request.question)
+    docs = document_service.search(request.question)
 
     return {
         "results": [
             {
                 "page": doc.metadata.get("page"),
+                "score": float(score),
                 "content": doc.page_content
             }
-            for doc in docs
+            for doc, score in docs
         ]
     }
-    
+
+
 @router.post("/ask")
 def ask(request: SearchRequest):
 
-    return service.ask(request.question)
+    return rag_service.ask(
+        session_id=request.session_id,
+        question=request.question
+    )
