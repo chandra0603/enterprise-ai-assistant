@@ -12,18 +12,39 @@ class GeminiLLM:
             temperature=0
         )
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str):
 
         response = self.llm.invoke(prompt)
 
-        # New versions return a list of content blocks
         if isinstance(response.content, list):
+
             text = ""
 
             for part in response.content:
-                if isinstance(part, dict) and part.get("type") == "text":
+
+                if (
+                    isinstance(part, dict)
+                    and part.get("type") == "text"
+                ):
                     text += part.get("text", "")
 
             return text
 
         return response.content
+
+    def stream(self, prompt: str):
+
+        for chunk in self.llm.stream(prompt):
+
+            if isinstance(chunk.content, list):
+
+                for part in chunk.content:
+
+                    if (
+                        isinstance(part, dict)
+                        and part.get("type") == "text"
+                    ):
+                        yield part.get("text", "")
+
+            else:
+                yield chunk.content
