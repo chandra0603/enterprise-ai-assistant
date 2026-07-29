@@ -1,20 +1,20 @@
-from app.config.settings import settings
 from app.rag.vector_store import VectorStore
 
 
 class Retriever:
 
     def __init__(self):
+
         self.vector_store = VectorStore()
 
-    def search(self, question, k=None):
+    def search(self, question, k=3):
 
-        if k is None:
-            k = settings.TOP_K
+        db = self.vector_store.get()
 
-        vector_db = self.vector_store.load()
+        if db is None:
+            return []
 
-        return vector_db.similarity_search_with_score(
+        return db.similarity_search_with_score(
             question,
             k=k
         )

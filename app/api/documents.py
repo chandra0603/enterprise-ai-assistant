@@ -30,10 +30,15 @@ async def upload_document(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # Process document
+    result = service.upload(str(file_path))
+
     return {
-        "message": "Document uploaded successfully.",
+        "message": result["message"],
         "filename": file.filename,
-        "path": str(file_path)
+        "path": str(file_path),
+        "parent_chunks": result["parent_chunks"],
+        "child_chunks": result["child_chunks"]
     }
 
 
@@ -48,38 +53,4 @@ def list_documents():
 
     return {
         "documents": files
-    }
-
-
-@router.get("/{filename}")
-def read_document(filename: str):
-
-    documents = service.load_document(filename)
-
-    return {
-        "pages": len(documents),
-        "preview": documents[0].page_content[:500]
-    }
-
-
-@router.get("/{filename}/chunks")
-def get_chunks(filename: str):
-
-    chunks = service.chunk_document(filename)
-
-    return {
-        "total_chunks": len(chunks),
-        "first_chunk": chunks[0].page_content,
-        "metadata": chunks[0].metadata
-    }
-
-
-@router.post("/{filename}/embeddings")
-def create_embeddings(filename: str):
-
-    total = service.create_embeddings(filename)
-
-    return {
-        "message": "Embeddings created successfully.",
-        "chunks": total
     }

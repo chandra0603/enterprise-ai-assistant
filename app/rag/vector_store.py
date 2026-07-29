@@ -1,4 +1,4 @@
-from pathlib import Path
+import os
 
 from langchain_community.vectorstores import FAISS
 
@@ -9,27 +9,37 @@ class VectorStore:
 
     def __init__(self):
 
-        self.embedding = EmbeddingModel().get_embedding()
+        self.index_path = "vector_db"
 
-        self.index_path = Path("data/faiss")
+        self.embeddings = EmbeddingModel().get_embedding()
 
-        self.index_path.mkdir(parents=True, exist_ok=True)
+        self.db = None
 
-    def create(self, chunks):
+    def create(self, documents):
 
-        db = FAISS.from_documents(
-            documents=chunks,
-            embedding=self.embedding
+        self.db = FAISS.from_documents(
+            documents,
+            self.embeddings
         )
 
-        db.save_local(str(self.index_path))
-
-        return db
+        self.db.save_local(self.index_path)
 
     def load(self):
 
-        return FAISS.load_local(
-            str(self.index_path),
-            self.embedding,
+        if not os.path.exists(self.index_path):
+            return None
+
+        self.db = FAISS.load_local(
+            self.index_path,
+            self.embeddings,
             allow_dangerous_deserialization=True
         )
+
+        return self.db
+
+    def get(self):
+
+        if self.db is None:
+            self.load()
+
+        return self.db
