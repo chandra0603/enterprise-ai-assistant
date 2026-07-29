@@ -3,6 +3,7 @@ from app.prompt.prompt_builder import PromptBuilder
 from app.llm.gemini import GeminiLLM
 from app.database.conversation_repository import ConversationRepository
 from app.rag.reranker import ReRanker
+from app.rag.context_compressor import ContextCompressor
 
 
 class RAGService:
@@ -14,32 +15,34 @@ class RAGService:
         self.llm = GeminiLLM()
         self.repository = ConversationRepository()
         self.reranker = ReRanker()
+        self.compressor = ContextCompressor()
 
     def ask(self, session_id: str, question: str):
 
-        # Get conversation history
         history = self.repository.get_history(session_id)
 
-        # Retrieve documents
         retrieved_docs = self.document_service.search(question)
 
-        # Re-rank documents
+        # Re-rank
         retrieved_docs = self.reranker.rerank(
             question,
             retrieved_docs
         )
 
-        # Build prompt
+        # Compress Context
+        retrieved_docs = self.compressor.compress(
+            question,
+            retrieved_docs
+        )
+
         prompt = self.prompt_builder.build(
             question,
             retrieved_docs,
             history
         )
 
-        # Generate answer
         answer = self.llm.generate(prompt)
 
-        # Save conversation
         self.repository.add_message(
             session_id,
             "user",
@@ -52,7 +55,6 @@ class RAGService:
             answer
         )
 
-        # Return response
         return {
             "answer": answer,
             "sources": [
@@ -66,19 +68,22 @@ class RAGService:
 
     def stream(self, session_id: str, question: str):
 
-        # Get conversation history
         history = self.repository.get_history(session_id)
 
-        # Retrieve documents
         retrieved_docs = self.document_service.search(question)
 
-        # Re-rank documents
+        # Re-rank
         retrieved_docs = self.reranker.rerank(
             question,
             retrieved_docs
         )
 
-        # Build prompt
+        # Compress Context
+        retrieved_docs = self.compressor.compress(
+            question,
+            retrieved_docs
+        )
+
         prompt = self.prompt_builder.build(
             question,
             retrieved_docs,
@@ -87,14 +92,11 @@ class RAGService:
 
         full_answer = ""
 
-        # Stream response
         for chunk in self.llm.stream(prompt):
 
             full_answer += chunk
-
             yield chunk
 
-        # Save conversation
         self.repository.add_message(
             session_id,
             "user",
