@@ -1,5 +1,6 @@
 from app.rag.loader import PDFLoader
-from app.rag.chunker import DocumentChunker
+from app.rag.parent_chunker import ParentChunker
+from app.rag.child_chunker import ChildChunker
 from app.rag.vector_store import VectorStore
 from app.rag.retriever import Retriever
 from app.rag.keyword_search import KeywordSearch
@@ -12,33 +13,57 @@ class DocumentService:
     def __init__(self):
 
         self.loader = PDFLoader()
-        self.chunker = DocumentChunker()
+
+        self.parent_chunker = ParentChunker()
+        self.child_chunker = ChildChunker()
+
         self.vector_store = VectorStore()
         self.retriever = Retriever()
+
         self.keyword_search = KeywordSearch()
         self.hybrid_retriever = HybridRetriever()
         self.query_expander = QueryExpander()
 
-        # Store uploaded chunks for keyword search
+        # Parent Documents
+        self.parent_documents = {}
+
+        # Child Documents
         self.documents = []
 
     def upload(self, file_path: str):
 
-        # Load PDF
         documents = self.loader.load(file_path)
 
-        # Split into chunks
-        chunks = self.chunker.split(documents)
+        parents = self.parent_chunker.split(documents)
 
-        # Create FAISS Index
-        self.vector_store.create(chunks)
+        children = []
 
-        # Store chunks for keyword search
-        self.documents.extend(chunks)
+        parent_id = 0
+
+        for parent in parents:
+
+            parent.metadata["parent_id"] = parent_id
+
+            self.parent_documents[parent_id] = parent
+
+            child_chunks = self.child_chunker.split([parent])
+
+            for child in child_chunks:
+
+                child.metadata["parent_id"] = parent_id
+
+                children.append(child)
+
+            parent_id += 1
+
+        self.vector_store.create(children)
+
+        self.documents = children
 
         return {
             "message": "Document uploaded successfully",
-            "chunks": len(chunks)
+            "parent_chunks": len(parents),
+            "child_chunks": len(children)
         }
 
     def search(self, question: str, k=None):
@@ -46,13 +71,11 @@ class DocumentService:
         if k is None:
             k = 3
 
-        # Generate multiple search queries
         queries = self.query_expander.expand(question)
 
         semantic_results = []
         keyword_results = []
 
-        # Search using every generated query
         for query in queries:
 
             semantic_results.extend(
@@ -66,11 +89,29 @@ class DocumentService:
                 )
             )
 
-        # Merge Semantic + Keyword results
-        hybrid_results = self.hybrid_retriever.merge(
+        hybrid = self.hybrid_retriever.merge(
             semantic_results,
             keyword_results,
             top_k=k
         )
 
-        return hybrid_results
+        parent_results = []
+
+        added = set()
+
+        for doc, score in hybrid:
+
+            parent_id = doc.metadata["parent_id"]
+
+            if parent_id not in added:
+
+                added.add(parent_id)
+
+                parent_results.append(
+                    (
+                        self.parent_documents[parent_id],
+                        score
+                    )
+                )
+
+        return parent_results
