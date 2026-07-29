@@ -1,10 +1,10 @@
 from app.rag.loader import PDFLoader
 from app.rag.chunker import DocumentChunker
-from app.rag.embeddings import EmbeddingModel
 from app.rag.vector_store import VectorStore
 from app.rag.retriever import Retriever
 from app.rag.keyword_search import KeywordSearch
 from app.rag.hybrid_retriever import HybridRetriever
+from app.rag.query_expander import QueryExpander
 
 
 class DocumentService:
@@ -13,12 +13,13 @@ class DocumentService:
 
         self.loader = PDFLoader()
         self.chunker = DocumentChunker()
-        self.embedding = EmbeddingModel()
         self.vector_store = VectorStore()
         self.retriever = Retriever()
         self.keyword_search = KeywordSearch()
         self.hybrid_retriever = HybridRetriever()
+        self.query_expander = QueryExpander()
 
+        # Store uploaded chunks for keyword search
         self.documents = []
 
     def upload(self, file_path: str):
@@ -29,10 +30,10 @@ class DocumentService:
         # Split into chunks
         chunks = self.chunker.split(documents)
 
-        # Create FAISS index
+        # Create FAISS Index
         self.vector_store.create(chunks)
 
-        # Keep chunks in memory for keyword search
+        # Store chunks for keyword search
         self.documents.extend(chunks)
 
         return {
@@ -42,15 +43,34 @@ class DocumentService:
 
     def search(self, question: str, k=None):
 
-        semantic_results = self.retriever.search(question, k)
+        if k is None:
+            k = 3
 
-        keyword_results = self.keyword_search.search(
-            question,
-            self.documents
-        )
+        # Generate multiple search queries
+        queries = self.query_expander.expand(question)
 
-        return self.hybrid_retriever.merge(
+        semantic_results = []
+        keyword_results = []
+
+        # Search using every generated query
+        for query in queries:
+
+            semantic_results.extend(
+                self.retriever.search(query, k)
+            )
+
+            keyword_results.extend(
+                self.keyword_search.search(
+                    query,
+                    self.documents
+                )
+            )
+
+        # Merge Semantic + Keyword results
+        hybrid_results = self.hybrid_retriever.merge(
             semantic_results,
             keyword_results,
-            top_k=k if k else 3
+            top_k=k
         )
+
+        return hybrid_results
