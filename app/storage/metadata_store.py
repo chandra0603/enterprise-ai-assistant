@@ -85,6 +85,7 @@ class MetadataStore:
 
     def load(self):
 
+        print(">>> NEW METADATA_STORE.PY IS RUNNING <<<")
         print("=" * 60)
         print("Loading metadata...")
 
@@ -92,7 +93,8 @@ class MetadataStore:
 
             print("No metadata found.")
             print("=" * 60)
-            return {}, []
+
+            return {}, [], {}
 
         with open(
             self.parent_file,

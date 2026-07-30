@@ -1,17 +1,21 @@
 venv/
 __pycache__/
-**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 
 .git/
 .gitignore
+
 .vscode/
 
-conversation.db
+.env
+
+*.db
+
 vector_db/
 metadata/
-data/faiss/
 
-.env
+uploads/
+
+*.log

@@ -22,3 +22,9 @@ def home():
     return {
         "message": "Enterprise AI Knowledge Assistant"
     }
+    
+@app.get("/health")
+def health():
+    return {
+        "status": "UP"
+    }

@@ -1,0 +1,18 @@
+services:
+  enterprise-ai-assistant:
+    build: .
+    container_name: enterprise-ai-assistant
+
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./vector_db:/app/vector_db
+      - ./metadata:/app/metadata
+      - ./uploads:/app/uploads
+      - ./conversation.db:/app/conversation.db
+
+    restart: unless-stopped
